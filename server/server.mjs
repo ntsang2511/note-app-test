@@ -6,6 +6,9 @@ import bodyParser from 'body-parser';
 import {expressMiddleware} from '@apollo/server/express4'
 import cors from 'cors';
 import mongoose from 'mongoose';
+import { makeExecutableSchema } from '@graphql-tools/schema';
+import { WebSocketServer } from 'ws';
+import {useServer} from 'graphql-ws/lib/use/ws';
 import { resolvers } from './resolvers/index.js';
 import { typeDefs } from './schemas/index.js';
 import 'dotenv/config';
@@ -16,10 +19,29 @@ const httpServer = http.createServer(app);
 const URI = `mongodb+srv://tansang:${process.env.DB_PASSWORD}@cluster0.5beke5u.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`
 const PORT = process.env.PORT || 4000;
 
+
+
+
+const schema = makeExecutableSchema({typeDefs, resolvers});
+const wsServer = new WebSocketServer({
+  server: httpServer,
+  path: '/graphql',
+})
+const serverCleanup = useServer({schema}, wsServer);
+
 const server = new ApolloServer({
-    typeDefs,
-    resolvers,
-    plugins: [ApolloServerPluginDrainHttpServer({httpServer})]
+    schema,
+    plugins: [ApolloServerPluginDrainHttpServer({httpServer}),
+    {
+      async serverWillStart(){
+        return {
+          async drainServer(){
+            await serverCleanup.dispose();
+          },
+        };
+      },
+    },
+  ]
 });
 
 await server.start();
